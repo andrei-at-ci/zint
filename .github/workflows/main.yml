@@ -2,21 +2,19 @@ name: CI Fuzz
 
 on:
   push:
-    branches: [ master ]
+    branches: [ "*" ]
   pull_request:
     branches: [ master ]
 
 env:
-  FUZZING_SERVER_ADDRESS: grpc.dev.code-intelligence.com:443
-  WEB_APP_ADDRESS: https://app.dev.code-intelligence.com
+  FUZZING_SERVER_ADDRESS: grpc.beta.code-intelligence.com:443
+  WEB_APP_ADDRESS: https://app.beta.code-intelligence.com
   CHECKOUT_DIR: checkout-dir/
-  REPORT_EMAIL: vanea@code-intelligence.com
 
 jobs:
   fuzz_tests:
     runs-on: ubuntu-latest
-    # Configure your build environment here
-    # container: example/docker_image
+    container: cifuzz/builder-zint:ubuntu_latest
     steps:
       - id: checkout
         name: Checkout
@@ -28,7 +26,13 @@ jobs:
         uses: CodeIntelligenceTesting/github-actions/install-fuzzer-builder@v3
       - id: build-fuzzers
         name: Build Fuzzers
-        run: ci-fuzz/bin/ci-build fuzzers --directory $GITHUB_WORKSPACE/$CHECKOUT_DIR/ 
+        run: |
+          ci-fuzz/bin/ci-build fuzzers --directory=$GITHUB_WORKSPACE/$CHECKOUT_DIR/ --git_commit_sha=$GITHUB_SHA --git_branch=$GITHUB_REF_NAME
+          mkdir $GITHUB_WORKSPACE/$CHECKOUT_DIR/fuzzing_artifact
+          cd $GITHUB_WORKSPACE/$CHECKOUT_DIR/fuzzing_artifact
+          tar -xf ../fuzzing-artifacts.tar.gz
+          cp /lib/x86_64-linux-gnu/libpng16.so.16 cifuzz-libs/
+          tar -czf ../fuzzing-artifacts.tar.gz *
         shell: "bash"
       - id: start-fuzzing
         name: Start Fuzzing
@@ -38,7 +42,6 @@ jobs:
           fuzzing_server_address: ${{ env.FUZZING_SERVER_ADDRESS }}
           fuzzing_artifact: ${{ env.CHECKOUT_DIR }}/fuzzing-artifacts.tar.gz
           checkout_directory: ${{ env.CHECKOUT_DIR }}
-          report_email: ${{ env.REPORT_EMAIL }}
       - id: monitor-fuzzing
         name: Fuzzing
         uses: CodeIntelligenceTesting/github-actions/monitor-fuzzing@v3
